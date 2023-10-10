@@ -5,14 +5,45 @@
 ******************************************************************************/
 MidoriCartDrive::MidoriCartDrive(const std::string &topic_name):Node(topic_name)
 {
-    QTextStream qstdout(stdout);
+    QTextStream qso(stdout);
 
-    SetupUSBport();
+    // パラメータ宣言
+    this->declare_parameter("gear_rate");
+    this->declare_parameter("num_of_teeth1");
+    this->declare_parameter("num_of_teeth2");
+    this->declare_parameter("tire_diameter");
+    this->declare_parameter("tred_width");
+    qso << "Paramter declared." << endl;
+
+    // パラメータ設定･取得サービスのクライアント
+    auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
+    qso << "Parameters cliend declared." << endl;
+    using namespace std::chrono_literals;
+    while(!parameters_client->wait_for_service(1s))
+    {
+        if(!rclcpp::ok())
+        {
+            qso << "Interrupted." << endl;
+            return;
+        }
+        qso << "Waiting." << endl;
+    }
+    qso << "Parameter server start." << endl;
+
+    // Launchファイルで設定されたパラメータデータの取得
+    for(auto & parameter : parameters_client->get_parameters
+        ({"gear_rate", "num_of_teeth1", "num_of_teeth2", "tire_diameter", "tred_width"}))
+    {
+        std::stringstream ss;
+        ss << "Name: " << parameter.get_name() << ", Value (" << parameter.get_type_name() << "): " << parameter.value_to_string();
+        RCLCPP_INFO(this->get_logger(), ss.str().c_str());
+    }
 
     // USBシリアルポートオープン
+    SetupUSBport(); 
     if(SerialPortsOpen())
     {
-        qstdout << "Both serial ports open." << endl;
+        qso << "Both serial ports open." << endl;
 
         // サブスクライバ作成して受信コールバック関数を登録
         m_subscriber = this->create_subscription<geometry_msgs::msg::Twist>(
@@ -22,7 +53,6 @@ MidoriCartDrive::MidoriCartDrive(const std::string &topic_name):Node(topic_name)
         );
 
         // 周期タイマ作成してコールバック関数を登録
-        using namespace std::chrono_literals;
         m_timer = this->create_wall_timer(
             50ms,
             std::bind(&MidoriCartDrive::CyclicTimerEvent, this)
@@ -30,7 +60,7 @@ MidoriCartDrive::MidoriCartDrive(const std::string &topic_name):Node(topic_name)
     }
     else
     {
-        qstdout << "Counldn't open the port." << endl;
+        qso << "Counldn't open the port." << endl;
     }
 }
 
@@ -124,15 +154,19 @@ void MidoriCartDrive::SubscriptionEvent(const geometry_msgs::msg::Twist::SharedP
 =============================================================================*/
 void MidoriCartDrive::CyclicTimerEvent(void)
 {
-
+#if 1
+    m_GearRate = 1;
+    m_NumTeeth1 = 3;
+    m_NumTeeth2 = 10;
+    m_TireDiameter = 205;
+    m_TredWidth = 500;
+#endif
     // 速度指令作成
-    double  gear_rate  = 0.33333,   // モータ軸から車輪軸までの減速比
-            tire_dia   = 205,       // タイヤ直径[mm]
-            tred_width = 500;       // トレッド幅(左右タイヤ間隔)[mm]
+    double  gear_rate = m_GearRate * m_NumTeeth1 / m_NumTeeth2;     // モータ軸から車輪軸までの減速比
     double  vl, va;
-
-    vl = m_CmdLinear * 1000 / (tire_dia * 3.14) / gear_rate * 60;
-    va = m_CmdAngular * (tred_width / 2 / 1000) * 1000 / (tire_dia * 3.14) / gear_rate * 60;
+    
+    vl = m_CmdLinear * 1000 / (m_TireDiameter * 3.14) / gear_rate * 60;
+    va = m_CmdAngular * (m_TredWidth / 2 / 1000) * 1000 / (m_TireDiameter * 3.14) / gear_rate * 60;
     int vcom_R = vl + va,
         vcom_L = vl - va;
 

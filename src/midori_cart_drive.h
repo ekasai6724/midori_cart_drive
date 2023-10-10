@@ -17,10 +17,16 @@ public:
 	~MidoriCartDrive();
 	
 private:
-	double					m_CmdLinear, m_CmdAngular;
 	QVector<QSerialPort*>	m_TmpPorts;
 	class QSerialPort		*m_SerialPort_L;
 	class QSerialPort		*m_SerialPort_R;
+	double					m_CmdLinear,		// 前後方向指令速度[m/s]
+							m_CmdAngular;		// 旋回方向指令速度[rad/s]
+	double					m_GearRate,			// 減速機の減速比(1/5減速機の場合は0.5)
+							m_NumTeeth1,		// 減速機側プーリ歯数
+							m_NumTeeth2,		// タイヤ側プーリ歯数
+							m_TireDiameter,		// タイヤ直径[mm]
+							m_TredWidth;		// トレッド幅[mm]
 
 	rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr	m_subscriber;
 	rclcpp::TimerBase::SharedPtr								m_timer;
