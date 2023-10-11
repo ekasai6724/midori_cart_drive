@@ -9,16 +9,23 @@ import launch_ros.actions
 def generate_launch_description():
     joy_config = launch.substitutions.LaunchConfiguration('joy_config')
     joy_dev = launch.substitutions.LaunchConfiguration('joy_dev')
-    config_filepath = launch.substitutions.LaunchConfiguration('config_filepath')
+    joy_config_filepath = launch.substitutions.LaunchConfiguration('joy_config_filepath')
+    cart_config_filepath = launch.substitutions.LaunchConfiguration('cart_config_filepath')
 
     return launch.LaunchDescription([
         launch.actions.DeclareLaunchArgument('joy_config', default_value='f710'),
         launch.actions.DeclareLaunchArgument('joy_dev', default_value='/dev/input/js0'),
-        launch.actions.DeclareLaunchArgument('config_filepath',
+        launch.actions.DeclareLaunchArgument('joy_config_filepath',
             default_value=[
                 launch.substitutions.TextSubstitution(text=os.path.join(get_package_share_directory('teleop_twist_joy'), 'config', '')),
                 joy_config,
                 launch.substitutions.TextSubstitution(text='.config.yaml')
+            ]
+        ),
+        launch.actions.DeclareLaunchArgument('cart_config_filepath',
+            default_value=[
+                launch.substitutions.ThisLaunchFileDir(),
+                "/cart_config.yaml"
             ]
         ),
 
@@ -33,9 +40,10 @@ def generate_launch_description():
         ),
         launch_ros.actions.Node(
             package='teleop_twist_joy', executable='teleop_node', name='teleop_twist_joy_node',
-            parameters=[config_filepath]
+            parameters=[joy_config_filepath]
         ),
         launch_ros.actions.Node(
-            package="midori_cart_drive", executable="midori_cart_drive", name="midori_cart_drive_node"
+            package="midori_cart_drive", executable="midori_cart_drive", name="midori_cart_drive_node",
+            parameters=[cart_config_filepath]
         ),
     ])

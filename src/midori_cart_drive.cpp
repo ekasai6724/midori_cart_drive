@@ -6,38 +6,31 @@
 MidoriCartDrive::MidoriCartDrive(const std::string &topic_name):Node(topic_name)
 {
     QTextStream qso(stdout);
+    using namespace std::chrono_literals;
 
     // パラメータ宣言
-    this->declare_parameter("gear_rate");
-    this->declare_parameter("num_of_teeth1");
-    this->declare_parameter("num_of_teeth2");
-    this->declare_parameter("tire_diameter");
-    this->declare_parameter("tred_width");
+    this->declare_parameter("gear_rate", 1.0);
+    this->declare_parameter("num_of_teeth1", 24.0);
+    this->declare_parameter("num_of_teeth2", 72.0);
+    this->declare_parameter("tire_diameter", 205.0);
+    this->declare_parameter("tred_width", 500.0);
     qso << "Paramter declared." << endl;
 
-    // パラメータ設定･取得サービスのクライアント
-    auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
-    qso << "Parameters cliend declared." << endl;
-    using namespace std::chrono_literals;
-    while(!parameters_client->wait_for_service(1s))
-    {
-        if(!rclcpp::ok())
-        {
-            qso << "Interrupted." << endl;
-            return;
-        }
-        qso << "Waiting." << endl;
-    }
-    qso << "Parameter server start." << endl;
-
     // Launchファイルで設定されたパラメータデータの取得
-    for(auto & parameter : parameters_client->get_parameters
+#if 1
+    for(auto & parameter : this->get_parameters
         ({"gear_rate", "num_of_teeth1", "num_of_teeth2", "tire_diameter", "tred_width"}))
     {
         std::stringstream ss;
         ss << "Name: " << parameter.get_name() << ", Value (" << parameter.get_type_name() << "): " << parameter.value_to_string();
         RCLCPP_INFO(this->get_logger(), ss.str().c_str());
     }
+    this->get_parameter("gear_rate",     m_GearRate     );
+    this->get_parameter("num_of_teeth1", m_NumTeeth1    );
+    this->get_parameter("num_of_teeth2", m_NumTeeth2    );
+    this->get_parameter("tire_diameter", m_TireDiameter );
+    this->get_parameter("tred_width",    m_TredWidth    );
+#endif
 
     // USBシリアルポートオープン
     SetupUSBport(); 
@@ -154,12 +147,12 @@ void MidoriCartDrive::SubscriptionEvent(const geometry_msgs::msg::Twist::SharedP
 =============================================================================*/
 void MidoriCartDrive::CyclicTimerEvent(void)
 {
-#if 1
-    m_GearRate = 1;
-    m_NumTeeth1 = 3;
-    m_NumTeeth2 = 10;
-    m_TireDiameter = 205;
-    m_TredWidth = 500;
+#if 0
+    m_GearRate = 1.0;
+    m_NumTeeth1 = 24.0;
+    m_NumTeeth2 = 72.0;
+    m_TireDiameter = 205.0;
+    m_TredWidth = 500.0;
 #endif
     // 速度指令作成
     double  gear_rate = m_GearRate * m_NumTeeth1 / m_NumTeeth2;     // モータ軸から車輪軸までの減速比
