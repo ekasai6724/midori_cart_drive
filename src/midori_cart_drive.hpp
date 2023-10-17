@@ -9,11 +9,12 @@
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <midori_cart_messages/srv/svon_message.hpp>
 
 class MidoriCartDrive : public rclcpp::Node
 {
 public:
-	MidoriCartDrive(const std::string &topic_name);
+	MidoriCartDrive(const std::string &name);
 	~MidoriCartDrive();
 	
 private:
@@ -28,12 +29,16 @@ private:
 							m_TireDiameter,		// タイヤ直径[mm]
 							m_TredWidth;		// トレッド幅[mm]
 
-	rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr	m_subscriber;
-	rclcpp::TimerBase::SharedPtr								m_timer;
+	rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr			m_cmdvel_sub;
+	rclcpp::Service<midori_cart_messages::srv::SvonMessage>::SharedPtr	m_svon_srv;
+	rclcpp::TimerBase::SharedPtr										m_timer;
 
 	void SetupUSBport(void);
 	bool SerialPortsOpen(void);
 	void SubscriptionEvent(const geometry_msgs::msg::Twist::SharedPtr msg);
+	void SvonCommandEvent(
+        const std::shared_ptr<midori_cart_messages::srv::SvonMessage::Request> request,
+        std::shared_ptr<midori_cart_messages::srv::SvonMessage::Response>      response);
 	void CyclicTimerEvent(void);
 	void SerialPortSend(QSerialPort *port, QByteArray send);
 };

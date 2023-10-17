@@ -18,7 +18,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# 依存パッケージ
+# find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -26,54 +26,54 @@ find_package(sensor_msgs REQUIRED)
 find_package(midori_cart_messages REQUIRED)
 find_package(Qt5 COMPONENTS Core Widgets REQUIRED)
 
-# Qtライブラリのビルド設定
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-# インクルードファイルディレクトリ
 include_directories(
 	${rclcpp_INCLUDE_DIRS}
 	${Qt5Core_INCLUDE_DIRS}
 	${Qt5Quick_INCLUDE_DIRS}
 )
 
-# ビルド設定関数定義
-function(custom_executable target)
-    add_executable(
-        ${target}
-        src/${target}.cpp
-    )
-    ament_target_dependencies(
-        ${target}
-        rclcpp
-        geometry_msgs
-        sensor_msgs
-        midori_cart_messages
-    )
-    qt5_use_modules(
-        ${target}
-        Core
-        SerialPort
-    )
-    target_link_libraries(
-        ${target}
-        Qt5::Core
-        Qt5::Widgets
-        Qt5::SerialPort
-    )
-    install(
-        TARGETS ${target}
-        DESTINATION lib/${PROJECT_NAME}
-    )
-    install(
-        DIRECTORY launch
-        DESTINATION share/${PROJECT_NAME}/
-    )
-endfunction()
+# Build
+file(GLOB SOURCE_FILES
+    "src/*.cpp"
+)
+add_executable(
+    ${PROJECT_NAME}
+    ${SOURCE_FILES}
+)
+ament_target_dependencies(
+    ${PROJECT_NAME}
+    rclcpp
+    geometry_msgs
+    sensor_msgs
+    midori_cart_messages
+)
+qt5_use_modules(
+    ${PROJECT_NAME}
+    Core
+    SerialPort
+)
+target_link_libraries(
+    ${PROJECT_NAME}
+    Qt5::Core
+    Qt5::Widgets
+    Qt5::SerialPort
+)
 
-custom_executable(midori_cart_drive)
-custom_executable(svon_client)
+# Install 
+install(
+    TARGETS ${PROJECT_NAME}
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install launch file
+install(
+    DIRECTORY launch
+    DESTINATION share/${PROJECT_NAME}/
+)
 
 ament_package()

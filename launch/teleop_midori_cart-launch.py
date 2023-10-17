@@ -46,4 +46,7 @@ def generate_launch_description():
             package="midori_cart_drive", executable="midori_cart_drive", name="midori_cart_drive_node",
             parameters=[cart_config_filepath]
         ),
+        launch_ros.actions.Node(
+            package="midori_cart_drive", executable="svon_client", name="svon_client_node"
+        ),
     ])
