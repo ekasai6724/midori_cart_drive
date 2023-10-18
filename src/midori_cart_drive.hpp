@@ -39,6 +39,7 @@ private:
 	void SvonCommandEvent(
         const std::shared_ptr<midori_cart_messages::srv::SvonMessage::Request> request,
         std::shared_ptr<midori_cart_messages::srv::SvonMessage::Response>      response);
+	bool SvonCmdRecv(QSerialPort *port);
 	void CyclicTimerEvent(void);
 	void SerialPortSend(QSerialPort *port, QByteArray send);
 };

@@ -1,13 +1,13 @@
 #include "midori_cart_drive.hpp"
 
+using namespace std::chrono_literals;
+using namespace std::placeholders;
+
 /******************************************************************************
 	コンストラクタ
 ******************************************************************************/
 MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 {
-	using namespace std::chrono_literals;
-	using namespace std::placeholders;
-
 	// パラメータ宣言
 	this->declare_parameter("gear_rate", 1.0);
 	this->declare_parameter("num_of_teeth1", 24.0);
@@ -16,7 +16,6 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 	this->declare_parameter("tred_width", 500.0);
 
 	// Launchファイルから渡されたパラメータデータの取得
-#if 1
 	for(auto & parameter : this->get_parameters
 		({"gear_rate", "num_of_teeth1", "num_of_teeth2", "tire_diameter", "tred_width"}))
 	{
@@ -29,7 +28,6 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 	this->get_parameter("num_of_teeth2", m_NumTeeth2    );
 	this->get_parameter("tire_diameter", m_TireDiameter );
 	this->get_parameter("tred_width",    m_TredWidth    );
-#endif
 
 	// USBシリアルポートオープン
 	SetupUSBport(); 
@@ -120,14 +118,14 @@ bool MidoriCartDrive::SerialPortsOpen(void)
 
 			SerialPortSend(port, "9A;PR;14");   // N0020「軸番号」読出しコマンド
 			QByteArray recv;
-			 while(port->waitForReadyRead(500))
-			 {
+			while(port->waitForReadyRead(500))
+			{
 				 if(port->bytesAvailable() > 0)
 				 {
 					 recv += port->readAll();
 				 }
 				 if((recv.indexOf(0x03) != -1) || (recv.indexOf(0x04) != -1))    break;
-			 }
+			}
 
 			{
 				std::stringstream ss;
@@ -155,30 +153,50 @@ void MidoriCartDrive::SubscriptionEvent(const geometry_msgs::msg::Twist::SharedP
 	m_CmdAngular = msg->angular.z;
 }
 
-#if 1
 /*=============================================================================
 	サーボオン/オフ指令サービスのコールバック関数
 =============================================================================*/
 void MidoriCartDrive::SvonCommandEvent(
-		//const std::shared_ptr<rmw_request_id_t>     request_header,
 		const std::shared_ptr<midori_cart_messages::srv::SvonMessage::Request> request,
 		std::shared_ptr<midori_cart_messages::srv::SvonMessage::Response>      response)
 {
-	bool ret = false;
+	// 本来はサーボオン/オフ指令を受けてUSBシリアル通信コマンドを送信して
+	// その返信を受信してサービスレスポンスを返したいが、
+	// ROSのサービス通信ではそのような処理はできないようなので断念
+	// とりあえずサービス通信構造だけは残しておく
+
+	bool	ret = false;
 
 	if(request->cmd == true)
 	{
 		RCLCPP_INFO(this->get_logger(), "Servo ON command.");
-		ret = true;
 	}
 	else
 	{
 		RCLCPP_INFO(this->get_logger(), "Servo OFF command.");
-		ret = false;
 	}
 	response->result = ret;
 }
-#endif
+
+/*=============================================================================
+	サーボオン/オフコマンドの返信を受信、OK/NG判定
+=============================================================================*/
+bool MidoriCartDrive::SvonCmdRecv(QSerialPort *port)
+{
+	QByteArray recv;
+
+	while(port->waitForReadyRead(500))
+	{
+			if(port->bytesAvailable() > 0)
+			{
+				recv += port->readAll();
+			}
+			if((recv.indexOf(0x03) != -1) || (recv.indexOf(0x04) != -1))    break;
+	}
+	if      (recv.mid(2, 6) == "9A;SVO")	return true;
+	else									return false;
+
+}
 
 /*=============================================================================
 	周期タイマコールバック関数(TBDms)
@@ -206,14 +224,17 @@ void MidoriCartDrive::CyclicTimerEvent(void)
 	//qso << "vl = " << QString::number(vl) << ", va = " << QString::number(va) << endl;
 
 	// 速度指令シリアル通信コマンド送信
-	QByteArray  sbf;
-	sbf.append("9A;VREF;");
-	sbf.append(QString::number(vcom_R, 16).rightJustified(8, '0').toLatin1());
-	SerialPortSend(m_SerialPort_R, sbf);
-	sbf.clear();
-	sbf.append("9A;VREF;");
-	sbf.append(QString::number(vcom_L, 16).rightJustified(8, '0').toLatin1());
-	SerialPortSend(m_SerialPort_L, sbf);
+	if(m_SerialPort_R->isOpen() && m_SerialPort_L->isOpen())
+	{
+		QByteArray  sbf;
+		sbf.append("9A;VREF;");
+		sbf.append(QString::number(vcom_R, 16).rightJustified(8, '0').toLatin1());
+		SerialPortSend(m_SerialPort_R, sbf);
+		sbf.clear();
+		sbf.append("9A;VREF;");
+		sbf.append(QString::number(vcom_L, 16).rightJustified(8, '0').toLatin1());
+		SerialPortSend(m_SerialPort_L, sbf);
+	}
 }
 
 /*=============================================================================
