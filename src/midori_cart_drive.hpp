@@ -28,6 +28,8 @@ private:
 							m_NumTeeth2,		// タイヤ側プーリ歯数
 							m_TireDiameter,		// タイヤ直径[mm]
 							m_TredWidth;		// トレッド幅[mm]
+	bool					m_SvonCmd,
+							m_SvoffCmd;
 
 	rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr			m_cmdvel_sub;
 	rclcpp::Service<midori_cart_messages::srv::SvonMessage>::SharedPtr	m_svon_srv;

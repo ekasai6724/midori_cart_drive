@@ -136,7 +136,9 @@ bool MidoriCartDrive::SerialPortsOpen(void)
 			if      (recv.mid(7, 8) == "00000000")  { m_SerialPort_R = port; cnt++; }   // 軸番号0:右車輪
 			else if (recv.mid(7, 8) == "00000001")  { m_SerialPort_L = port; cnt++; }   // 軸番号1:左車輪
 
-			SerialPortSend(port, "9A;SVON");
+			//SerialPortSend(port, "9A;SVON");
+			m_SvonCmd = false;
+			m_SvoffCmd = true;
 		}
 	}
 	if(cnt == 2)    return true;
@@ -163,17 +165,21 @@ void MidoriCartDrive::SvonCommandEvent(
 	// 本来はサーボオン/オフ指令を受けてUSBシリアル通信コマンドを送信して
 	// その返信を受信してサービスレスポンスを返したいが、
 	// ROSのサービス通信ではそのような処理はできないようなので断念
-	// とりあえずサービス通信構造だけは残しておく
+	// とりあえずサービス通信構造を残し、タイマ処理にサーボオン/オフ指令を渡すだけとする
 
-	bool	ret = false;
+	bool	ret = true;
 
 	if(request->cmd == true)
 	{
 		RCLCPP_INFO(this->get_logger(), "Servo ON command.");
+		m_SvonCmd = true;
+		m_SvoffCmd = false;
 	}
 	else
 	{
 		RCLCPP_INFO(this->get_logger(), "Servo OFF command.");
+		m_SvonCmd = false;
+		m_SvoffCmd = true;
 	}
 	response->result = ret;
 }
@@ -226,14 +232,29 @@ void MidoriCartDrive::CyclicTimerEvent(void)
 	// 速度指令シリアル通信コマンド送信
 	if(m_SerialPort_R->isOpen() && m_SerialPort_L->isOpen())
 	{
-		QByteArray  sbf;
-		sbf.append("9A;VREF;");
-		sbf.append(QString::number(vcom_R, 16).rightJustified(8, '0').toLatin1());
-		SerialPortSend(m_SerialPort_R, sbf);
-		sbf.clear();
-		sbf.append("9A;VREF;");
-		sbf.append(QString::number(vcom_L, 16).rightJustified(8, '0').toLatin1());
-		SerialPortSend(m_SerialPort_L, sbf);
+		if(m_SvonCmd)
+		{
+			SerialPortSend(m_SerialPort_R, "9A;SVON");
+			SerialPortSend(m_SerialPort_L, "9A;SVON");
+			m_SvonCmd = false;
+		}
+		else if(m_SvoffCmd)
+		{
+			SerialPortSend(m_SerialPort_R, "9A;SVOFF");
+			SerialPortSend(m_SerialPort_L, "9A;SVOFF");
+			m_SvoffCmd = false;
+		}
+		else
+		{
+			QByteArray  sbf;
+			sbf.append("9A;VREF;");
+			sbf.append(QString::number(vcom_R, 16).rightJustified(8, '0').toLatin1());
+			SerialPortSend(m_SerialPort_R, sbf);
+			sbf.clear();
+			sbf.append("9A;VREF;");
+			sbf.append(QString::number(vcom_L, 16).rightJustified(8, '0').toLatin1());
+			SerialPortSend(m_SerialPort_L, sbf);
+		}
 	}
 }
 

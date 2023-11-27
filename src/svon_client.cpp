@@ -3,6 +3,9 @@
 using namespace std::chrono_literals;
 using namespace std::placeholders;
 
+#define SVON_BUTTON		7		// [START]ボタン
+#define SVOFF_BUTTON	6		// [BACK]ボタン
+
 /******************************************************************************
     コンストラクタ
 ******************************************************************************/
@@ -14,13 +17,14 @@ SvonClient::SvonClient(const std::string &name):Node(name)
 		std::bind(&SvonClient::SubscriptionEvent, this, _1)
 	);
 	m_svon_client = this->create_client<midori_cart_messages::srv::SvonMessage>("svon_service");
+	
+	for(int i = 0; i < 8; i++)		m_Joymsg_ex.axes.push_back(0);
+	for(int i = 0; i < 11; i++)		m_Joymsg_ex.buttons.push_back(0);
 }
 
 /*=============================================================================
 	サブスクライバ受信コールバック関数
 =============================================================================*/
-#define SVON_BUTTON		7		// [START]ボタン
-#define SVOFF_BUTTON	6		// [BACK]ボタン
 void SvonClient::SubscriptionEvent(const sensor_msgs::msg::Joy::SharedPtr msg)
 {
 	if(	(msg->buttons[SVON_BUTTON]  && !m_Joymsg_ex.buttons[SVON_BUTTON] ) ||
