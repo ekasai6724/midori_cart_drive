@@ -23,6 +23,10 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(midori_cart_messages REQUIRED)
 find_package(Qt5 COMPONENTS Core Widgets REQUIRED)
 
@@ -50,6 +54,10 @@ function(custom_executable target)
         rclcpp
         geometry_msgs
         sensor_msgs
+        nav_msgs
+        std_msgs
+        tf2
+        tf2_ros
         midori_cart_messages
     )
     qt5_use_modules(

@@ -1,7 +1,0 @@
-midori_cart_drive_node:
-  ros__parameters:
-    gear_rate: 1.0
-    num_of_teeth1: 24.0
-    num_of_teeth2: 72.0
-    tire_diameter: 205.0
-    tred_width: 500.0

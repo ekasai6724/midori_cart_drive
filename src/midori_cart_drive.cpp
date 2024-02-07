@@ -9,11 +9,13 @@ using namespace std::placeholders;
 MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 {
 	// パラメータ宣言
-	this->declare_parameter("gear_rate", 1.0);
-	this->declare_parameter("num_of_teeth1", 24.0);
-	this->declare_parameter("num_of_teeth2", 72.0);
-	this->declare_parameter("tire_diameter", 205.0);
-	this->declare_parameter("tred_width", 500.0);
+	this->declare_parameter("gear_rate");
+	this->declare_parameter("num_of_teeth1");
+	this->declare_parameter("num_of_teeth2");
+	this->declare_parameter("tire_diameter");
+	this->declare_parameter("tred_width");
+	this->declare_parameter("odometry.frame_id");
+	this->declare_parameter("odometry.child_framd_id");
 
 	// Launchファイルから渡されたパラメータデータの取得
 	for(auto & parameter : this->get_parameters
@@ -23,11 +25,14 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 		ss << "Name: " << parameter.get_name() << ", Value (" << parameter.get_type_name() << "): " << parameter.value_to_string();
 		RCLCPP_INFO(this->get_logger(), ss.str().c_str());
 	}
-	this->get_parameter("gear_rate",     m_GearRate     );
-	this->get_parameter("num_of_teeth1", m_NumTeeth1    );
-	this->get_parameter("num_of_teeth2", m_NumTeeth2    );
-	this->get_parameter("tire_diameter", m_TireDiameter );
-	this->get_parameter("tred_width",    m_TredWidth    );
+	this->get_parameter_or<double>("gear_rate",     p_GearRate,     1.0   );
+	this->get_parameter_or<double>("num_of_teeth1", p_NumTeeth1,    24.0  );
+	this->get_parameter_or<double>("num_of_teeth2", p_NumTeeth2,    72.0  );
+	this->get_parameter_or<double>("tire_diameter", p_TireDiameter, 210.0 );
+	this->get_parameter_or<double>("tred_width",    p_TredWidth,    537.0 );
+
+	this->get_parameter_or<std::string>("odometry.frame_id",       p_OdmFrameID, std::string("odom")           );
+	this->get_parameter_or<std::string>("odometry.child_frame_id", p_OdmChildID, std::string("base_footprint") );
 
 	// USBシリアルポートオープン
 	SetupUSBport(); 
@@ -39,13 +44,32 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 		m_cmdvel_sub = this->create_subscription<geometry_msgs::msg::Twist>(
 			"/cmd_vel",
 			rclcpp::QoS(10),
-			std::bind(&MidoriCartDrive::SubscriptionEvent, this, _1)
+			std::bind(&MidoriCartDrive::CmdvelSubscriptionEvent, this, _1)
 		);
 		
 		// サーボオン/オフサービス作成してコールバック関数を登録
 		m_svon_srv = this->create_service<midori_cart_messages::srv::SvonMessage>(
 			"svon_service",
 			std::bind(&MidoriCartDrive::SvonCommandEvent, this, _1, _2)
+		);
+
+		// 左車輪サーボ制御入力返信パブリッシャ作成
+		m_inputL_pub = this->create_publisher<midori_cart_messages::msg::ServoInput>(
+			"servo_input_L",
+			rclcpp::QoS(10)
+		);
+
+		// 左車輪サーボ制御出力指令サブスクライバ作成して受信コールバック関数を登録
+		m_outputL_sub = this->create_subscription<midori_cart_messages::msg::ServoOutput>(
+			"/servo_output_L",
+			rclcpp::QoS(10),
+			std::bind(&MidoriCartDrive::ServoOutputSubscriptionEvent, this, _1)
+		);
+
+		// odometryデータパブリッシャ作成
+		m_odom_pub = this->create_publisher<nav_msgs::msg::Odometry>(
+			"odom",
+			rclcpp::QoS(10)
 		);
 
 		// 周期タイマ作成してコールバック関数を登録
@@ -118,37 +142,36 @@ bool MidoriCartDrive::SerialPortsOpen(void)
 
 			SerialPortSend(port, "9A;PR;14");   // N0020「軸番号」読出しコマンド
 			QByteArray recv;
-			while(port->waitForReadyRead(500))
+			if(SerialPortRecv(port, &recv))
 			{
-				 if(port->bytesAvailable() > 0)
-				 {
-					 recv += port->readAll();
-				 }
-				 if((recv.indexOf(0x03) != -1) || (recv.indexOf(0x04) != -1))    break;
+				{
+					std::stringstream ss;
+					ss << "[recv]:" << recv.toStdString();
+					RCLCPP_INFO(this->get_logger(), ss.str().c_str());
+				}
+
+				if      (recv.mid(7, 8) == "00000000")  { m_SerialPort_R = port; cnt++; }   // 軸番号0:右車輪
+				else if (recv.mid(7, 8) == "00000001")  { m_SerialPort_L = port; cnt++; }   // 軸番号1:左車輪
 			}
 
-			{
-				std::stringstream ss;
-				ss << "[recv]:" << recv.toStdString();
-				RCLCPP_INFO(this->get_logger(), ss.str().c_str());
-			}
-
-			if      (recv.mid(7, 8) == "00000000")  { m_SerialPort_R = port; cnt++; }   // 軸番号0:右車輪
-			else if (recv.mid(7, 8) == "00000001")  { m_SerialPort_L = port; cnt++; }   // 軸番号1:左車輪
-
-			//SerialPortSend(port, "9A;SVON");
-			m_SvonCmd = false;
-			m_SvoffCmd = true;
+			SerialPortSend(port, "9A;IOTEN;0007");		// 制御入力テスト全ビット有効化
+			SerialPortRecv(port, &recv);
+			SerialPortSend(port, "9A;ZSET;0");			// サーボ座標リセット
+			SerialPortRecv(port, &recv);
 		}
 	}
+	m_SvonCmd = false;
+	m_SvoffCmd = true;
+	m_IoRequest = false;
+
 	if(cnt == 2)    return true;
 	else            return false;
 }
 
 /*=============================================================================
-	サブスクライバ受信コールバック関数
+	ロボット速度指令受信コールバック関数
 =============================================================================*/
-void MidoriCartDrive::SubscriptionEvent(const geometry_msgs::msg::Twist::SharedPtr msg)
+void MidoriCartDrive::CmdvelSubscriptionEvent(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
 	// 受信したL/A指令をメンバ変数に保存するだけ
 	m_CmdLinear = msg->linear.x;
@@ -183,45 +206,34 @@ void MidoriCartDrive::SvonCommandEvent(
 	}
 	response->result = ret;
 }
-#if 0
+
 /*=============================================================================
-	サーボオン/オフコマンドの返信を受信、OK/NG判定
+	サーボ制御出力指令受信コールバック関数
 =============================================================================*/
-bool MidoriCartDrive::SvonCmdRecv(QSerialPort *port)
+void MidoriCartDrive::ServoOutputSubscriptionEvent(const midori_cart_messages::msg::ServoOutput::SharedPtr msg)
 {
-	QByteArray recv;
-
-	while(port->waitForReadyRead(500))
-	{
-			if(port->bytesAvailable() > 0)
-			{
-				recv += port->readAll();
-			}
-			if((recv.indexOf(0x03) != -1) || (recv.indexOf(0x04) != -1))    break;
-	}
-	if      (recv.mid(2, 6) == "9A;SVO")	return true;
-	else									return false;
-
+	m_OutputR_cmd = msg->output;
+	//m_IoRequest = true;
 }
-#endif
+
 /*=============================================================================
-	周期タイマコールバック関数(TBDms)
+	周期タイマコールバック関数(50ms)
 =============================================================================*/
 void MidoriCartDrive::CyclicTimerEvent(void)
 {
 #if 0
-	m_GearRate = 1.0;
-	m_NumTeeth1 = 24.0;
-	m_NumTeeth2 = 72.0;
-	m_TireDiameter = 205.0;
-	m_TredWidth = 500.0;
+	p_GearRate = 1.0;
+	p_NumTeeth1 = 24.0;
+	p_NumTeeth2 = 72.0;
+	p_TireDiameter = 205.0;
+	p_TredWidth = 500.0;
 #endif
 	// 速度指令作成
-	double  gear_rate = m_GearRate * m_NumTeeth1 / m_NumTeeth2;     // モータ軸から車輪軸までの減速比
+	double  gear_rate = p_GearRate * p_NumTeeth1 / p_NumTeeth2;     // モータ軸から車輪軸までの減速比
 	double  vl, va;
 	
-	vl = m_CmdLinear * 1000 / (m_TireDiameter * 3.14) / gear_rate * 60;
-	va = m_CmdAngular * (m_TredWidth / 2 / 1000) * 1000 / (m_TireDiameter * 3.14) / gear_rate * 60;
+	vl = m_CmdLinear * 1000 / (p_TireDiameter * 3.14) / gear_rate * 60;
+	va = m_CmdAngular * (p_TredWidth / 2 / 1000) * 1000 / (p_TireDiameter * 3.14) / gear_rate * 60;
 	int vcom_R = vl + va,
 		vcom_L = vl - va;
 
@@ -232,18 +244,33 @@ void MidoriCartDrive::CyclicTimerEvent(void)
 	// 速度指令シリアル通信コマンド送信
 	if(m_SerialPort_R->isOpen() && m_SerialPort_L->isOpen())
 	{
+		QByteArray	recv;
+
+		// サーボオン指令
 		if(m_SvonCmd)
 		{
 			SerialPortSend(m_SerialPort_R, "9A;SVON");
 			SerialPortSend(m_SerialPort_L, "9A;SVON");
+			SerialPortRecv(m_SerialPort_R, &recv);
+			SerialPortRecv(m_SerialPort_L, &recv);
 			m_SvonCmd = false;
 		}
+		// サーボオフ指令
 		else if(m_SvoffCmd)
 		{
 			SerialPortSend(m_SerialPort_R, "9A;SVOFF");
 			SerialPortSend(m_SerialPort_L, "9A;SVOFF");
+			SerialPortRecv(m_SerialPort_R, &recv);
+			SerialPortRecv(m_SerialPort_L, &recv);
 			m_SvoffCmd = false;
 		}
+		// サーボ制御出力/制御入力読込
+		else if(m_IoRequest)
+		{
+			ServoIO(m_SerialPort_R, m_OutputR_cmd);
+			m_IoRequest = false;	// 次回周期は速度指令通信
+		}
+		// 左右車輪速度指令出力/車輪回転角度読込
 		else
 		{
 			QByteArray  sbf;
@@ -254,8 +281,159 @@ void MidoriCartDrive::CyclicTimerEvent(void)
 			sbf.append("9A;VREF;");
 			sbf.append(QString::number(vcom_L, 16).rightJustified(8, '0').toLatin1());
 			SerialPortSend(m_SerialPort_L, sbf);
+			sbf.clear();
+
+			// [VREF]コマンド返信の現在位置[pulse]を[rad]に変換
+			SerialPortRecv(m_SerialPort_R, &recv);
+			int32_t bf0 = recv.mid(9, 8).toLong(0, 16);
+			m_JointPositions[0] = (double)bf0 * gear_rate * 2 * 3.14 / 10000;
+			SerialPortRecv(m_SerialPort_L, &recv);
+			int32_t bf1 = recv.mid(9, 8).toLong(0, 16);
+			m_JointPositions[1] = (double)bf1 * gear_rate * 2 * 3.14 / 10000;
+			std::stringstream ss;
+			ss << "JointPosition_R: " << std::to_string(m_JointPositions[0]) << ", JointPosition_L: " << std::to_string(m_JointPositions[1]);
+			//ss << "JointPosition_R: " << std::to_string(bf0) << ", JointPosition_L: " << std::to_string(bf1);
+			//RCLCPP_INFO(this->get_logger(), ss.str().c_str());
+
+			// odometryデータを算出してpublish
+			rclcpp::Clock ros_clock(RCL_ROS_TIME);
+			OdometryMain(ros_clock.now());
+
+			m_IoRequest = true;		// 次回周期はサーボI/O通信
 		}
 	}
+}
+
+/*=============================================================================
+	サーボ制御入出力処理
+=============================================================================*/
+bool MidoriCartDrive::ServoIO(QSerialPort *port, int16_t out)
+{
+	QByteArray	send, recv;
+	bool 		ret = false;
+
+	// 制御出力データ送信
+	send.append("9A;IOTDT;");
+	send.append(QString::number(out, 16).rightJustified(8, '0').toLatin1());
+	SerialPortSend(port, send);
+
+	// 制御入力状態を受信してノード外部に発行
+	ret = SerialPortRecv(port, &recv);
+	if(ret)
+	{
+		std::stringstream ss;
+		ss << "[recv]:" << recv.toStdString();
+		//RCLCPP_INFO(this->get_logger(), ss.str().c_str());
+		
+		if(recv.mid(4, 5) == "IOTDT")
+		{
+			auto msg = midori_cart_messages::msg::ServoInput();
+			msg.input = recv.mid(10, 8).toInt(0, 16);
+			m_inputL_pub->publish(msg);
+			ret = true;
+		}
+	}
+	return ret;
+}
+
+/*=============================================================================
+	odometry(現在位置/速度のデータ)メイン
+=============================================================================*/
+void MidoriCartDrive::OdometryMain(const rclcpp::Time &now)
+{
+	static rclcpp::Time last_time = now;
+	rclcpp::Duration duration(now.nanoseconds() - last_time.nanoseconds());
+
+	CalculateOdometry(duration);
+	PublishOdometry(now);
+}
+
+/*=============================================================================
+	odometryデータ算出
+=============================================================================*/
+bool MidoriCartDrive::CalculateOdometry(const rclcpp::Duration &duration)
+{
+	static std::array<double, 2>	last_joint_positions = {0.0f, 0.0f};
+
+	double delta_s = 0.0;
+	double delta_theta = 0.0;
+	double theta = 0.0;
+
+	double v = 0.0;		// translational velocity [m/s]
+	double w = 0.0;		// rotational velocity [rad/s]
+
+	double step_time = duration.seconds();
+
+	if (step_time == 0.0) {
+		return false;
+	}
+
+	// rotation value of wheel [rad]
+	double	wheel_r = m_JointPositions[0] - last_joint_positions[0];
+	double	wheel_l = m_JointPositions[1] - last_joint_positions[1];
+
+	if (std::isnan(wheel_l))	wheel_l = 0.0;
+	if (std::isnan(wheel_r))	wheel_r = 0.0;
+
+	delta_s = (p_TireDiameter / 1000 / 2.0) * (wheel_r + wheel_l) / 2.0;
+	theta = (p_TireDiameter / 1000 / 2.0) * (wheel_r - wheel_l) / (p_TredWidth / 1000);
+	delta_theta = theta;
+
+	// compute odometric pose
+	m_RobotPose[0] += delta_s * cos(m_RobotPose[2] + (delta_theta / 2.0));
+	m_RobotPose[1] += delta_s * sin(m_RobotPose[2] + (delta_theta / 2.0));
+	m_RobotPose[2] += delta_theta;
+
+	{
+		std::stringstream ss;
+		ss << "RobotPose[0]: " << std::to_string(m_RobotPose[0]) << ", " 
+		   << "RobotPose[1]: " << std::to_string(m_RobotPose[1]) << ", "
+		   << "RobotPose[2]: " << std::to_string(m_RobotPose[2]);
+		//RCLCPP_INFO(this->get_logger(), ss.str().c_str());
+	}
+	//RCLCPP_DEBUG(nh_->get_logger(), "x : %f, y : %f", m_RobotPose[0], m_RobotPose[1]);
+
+	// compute odometric instantaneouse velocity
+	v = delta_s / step_time;
+	w = delta_theta / step_time;
+
+	m_RobotVel[0] = v;
+	m_RobotVel[1] = 0.0;
+	m_RobotVel[2] = w;
+
+	last_joint_positions[0] = m_JointPositions[0];
+	last_joint_positions[1] = m_JointPositions[1];
+
+	return true;
+}
+
+/*=============================================================================
+	odometryデータ発行
+=============================================================================*/
+void MidoriCartDrive::PublishOdometry(const rclcpp::Time &now)
+{
+	auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
+
+	odom_msg->header.frame_id = p_OdmFrameID;
+	odom_msg->child_frame_id = p_OdmChildID;
+	odom_msg->header.stamp = now;
+
+	odom_msg->pose.pose.position.x = m_RobotPose[0];
+	odom_msg->pose.pose.position.y = m_RobotPose[1];
+	odom_msg->pose.pose.position.z = 0;
+
+	tf2::Quaternion q;
+	q.setRPY(0.0, 0.0, m_RobotPose[2]);
+
+	odom_msg->pose.pose.orientation.x = q.x();
+	odom_msg->pose.pose.orientation.y = q.y();
+	odom_msg->pose.pose.orientation.z = q.z();
+	odom_msg->pose.pose.orientation.w = q.w();
+
+	odom_msg->twist.twist.linear.x = m_RobotVel[0];
+	odom_msg->twist.twist.angular.z = m_RobotVel[2];
+
+	m_odom_pub->publish(std::move(odom_msg));
 }
 
 /*=============================================================================
@@ -265,11 +443,36 @@ void MidoriCartDrive::SerialPortSend(QSerialPort *port, QByteArray send)
 {
 	QByteArray  sbf;
 
+	port->clear(QSerialPort::Input);	// 受信バッファクリア
+	
 	sbf.append(0x02);   // STX
 	sbf.append(send);
 	sbf.append(0x03);   // ETX
 
 	port->write(sbf);
+}
+
+/*=============================================================================
+	USBシリアルポート受信
+=============================================================================*/
+bool MidoriCartDrive::SerialPortRecv(QSerialPort *port, QByteArray *recv)
+{
+	bool ret = false;
+
+	recv->clear();
+	while(port->waitForReadyRead(500))
+	{
+			if(port->bytesAvailable() > 0)
+			{
+				*recv += port->readAll();
+			}
+			if((recv->indexOf(0x03) != -1) || (recv->indexOf(0x04) != -1))
+			{
+				ret = true;
+				break;
+			}
+	}
+	return ret;
 }
 
 /******************************************************************************
