@@ -79,6 +79,10 @@ function(custom_executable target)
         DIRECTORY launch
         DESTINATION share/${PROJECT_NAME}/
     )
+    install(
+        DIRECTORY urdf
+        DESTINATION share/${PROJECT_NAME}/
+    )
 endfunction()
 
 custom_executable(midori_cart_drive)

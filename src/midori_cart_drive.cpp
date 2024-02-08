@@ -34,6 +34,8 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 	this->get_parameter_or<std::string>("odometry.frame_id",       p_OdmFrameID, std::string("odom")           );
 	this->get_parameter_or<std::string>("odometry.child_frame_id", p_OdmChildID, std::string("base_footprint") );
 
+	QThread::msleep(1000);
+	
 	// USBシリアルポートオープン
 	SetupUSBport(); 
 	if(SerialPortsOpen())
