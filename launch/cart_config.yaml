@@ -5,3 +5,8 @@ midori_cart_drive_node:
     num_of_teeth2: 72.0
     tire_diameter: 208.0
     tred_width: 537.0
+
+    odometry:
+      publish_tf: true
+      frame_id: "odom"
+      child_frame_id: "base_footprint"

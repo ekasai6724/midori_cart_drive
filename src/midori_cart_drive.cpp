@@ -15,11 +15,13 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 	this->declare_parameter("tire_diameter");
 	this->declare_parameter("tred_width");
 	this->declare_parameter("odometry.frame_id");
-	this->declare_parameter("odometry.child_framd_id");
+	this->declare_parameter("odometry.child_frame_id");
+	this->declare_parameter("odometry.publish_tf");
 
 	// Launchファイルから渡されたパラメータデータの取得
 	for(auto & parameter : this->get_parameters
-		({"gear_rate", "num_of_teeth1", "num_of_teeth2", "tire_diameter", "tred_width"}))
+		({"gear_rate", "num_of_teeth1", "num_of_teeth2", "tire_diameter", "tred_width",
+		  "odometry.frame_id", "odometry.child_frame_id", "odometry.publish_tf"			}))
 	{
 		std::stringstream ss;
 		ss << "Name: " << parameter.get_name() << ", Value (" << parameter.get_type_name() << "): " << parameter.value_to_string();
@@ -33,6 +35,7 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 
 	this->get_parameter_or<std::string>("odometry.frame_id",       p_OdmFrameID, std::string("odom")           );
 	this->get_parameter_or<std::string>("odometry.child_frame_id", p_OdmChildID, std::string("base_footprint") );
+	this->get_parameter_or<bool>       ("odometry.publish_tf",     p_PublishTF,  false                         );
 
 	QThread::msleep(1000);
 	
@@ -73,6 +76,7 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 			"odom",
 			rclcpp::QoS(10)
 		);
+		m_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
 		// 周期タイマ作成してコールバック関数を登録
 		m_timer = this->create_wall_timer(
@@ -435,7 +439,19 @@ void MidoriCartDrive::PublishOdometry(const rclcpp::Time &now)
 	odom_msg->twist.twist.linear.x = m_RobotVel[0];
 	odom_msg->twist.twist.angular.z = m_RobotVel[2];
 
+	geometry_msgs::msg::TransformStamped odom_tf;
+
+	odom_tf.transform.translation.x = odom_msg->pose.pose.position.x;
+	odom_tf.transform.translation.y = odom_msg->pose.pose.position.y;
+	odom_tf.transform.translation.z = odom_msg->pose.pose.position.z;
+	odom_tf.transform.rotation = odom_msg->pose.pose.orientation;
+
+	odom_tf.header.frame_id = p_OdmFrameID;
+	odom_tf.child_frame_id = p_OdmChildID;
+	odom_tf.header.stamp = now;
+
 	m_odom_pub->publish(std::move(odom_msg));
+	if(p_PublishTF)	m_tf_broadcaster->sendTransform(odom_tf);
 }
 
 /*=============================================================================

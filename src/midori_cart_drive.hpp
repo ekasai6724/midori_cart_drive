@@ -37,6 +37,7 @@ private:
 							p_TredWidth;			// トレッド幅[mm]
 	std::string				p_OdmFrameID,
 							p_OdmChildID;
+	bool					p_PublishTF;
 
 	QVector<QSerialPort*>	m_TmpPorts;
 	class QSerialPort		*m_SerialPort_L;
@@ -57,6 +58,7 @@ private:
 	rclcpp::Publisher<midori_cart_messages::msg::ServoInput>::SharedPtr			m_inputL_pub;
 	rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr						m_odom_pub;
 	rclcpp::TimerBase::SharedPtr												m_timer;
+	std::unique_ptr<tf2_ros::TransformBroadcaster>								m_tf_broadcaster;
 
 	void SetupUSBport(void);
 	bool SerialPortsOpen(void);
