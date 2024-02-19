@@ -30,11 +30,12 @@ public:
 	~MidoriCartDrive();
 	
 private:
-	double					p_GearRate,				// 減速機の減速比(1/5減速機の場合は0.5)
+	double					p_GearRate,				// 減速機の減速比(1/5減速機の場合は0.2)
 							p_NumTeeth1,			// 減速機側プーリ歯数
 							p_NumTeeth2,			// タイヤ側プーリ歯数
 							p_TireDiameter,			// タイヤ直径[mm]
 							p_TredWidth;			// トレッド幅[mm]
+	int32_t					p_CmdResetInterval;		// 速度指令をリセットする間隔[ms]
 	std::string				p_OdmFrameID,
 							p_OdmChildID;
 	bool					p_PublishTF;
@@ -44,6 +45,7 @@ private:
 	class QSerialPort		*m_SerialPort_R;
 	double					m_CmdLinear,			// 前後方向指令速度[m/s]
 							m_CmdAngular;			// 旋回方向指令速度[rad/s]
+	int32_t					m_CmdIntervalCnt;		// cmd_vel受信していない期間のカウント
 	bool					m_SvonCmd,				// サーボオン指令リクエスト
 							m_SvoffCmd,				// サーボオフ指令リクエスト
 							m_IoRequest;			// サーボ制御入出力更新リクエスト

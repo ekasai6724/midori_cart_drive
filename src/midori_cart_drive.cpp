@@ -14,14 +14,15 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 	this->declare_parameter("num_of_teeth2");
 	this->declare_parameter("tire_diameter");
 	this->declare_parameter("tred_width");
+	this->declare_parameter("cmd_reset_interval");
 	this->declare_parameter("odometry.frame_id");
 	this->declare_parameter("odometry.child_frame_id");
 	this->declare_parameter("odometry.publish_tf");
 
 	// Launchファイルから渡されたパラメータデータの取得
 	for(auto & parameter : this->get_parameters
-		({"gear_rate", "num_of_teeth1", "num_of_teeth2", "tire_diameter", "tred_width",
-		  "odometry.frame_id", "odometry.child_frame_id", "odometry.publish_tf"			}))
+		({"gear_rate", "num_of_teeth1", "num_of_teeth2", "tire_diameter", "tred_width", "cmd_reset_interval",
+		  "odometry.frame_id", "odometry.child_frame_id", "odometry.publish_tf"								}))
 	{
 		std::stringstream ss;
 		ss << "Name: " << parameter.get_name() << ", Value (" << parameter.get_type_name() << "): " << parameter.value_to_string();
@@ -33,6 +34,8 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 	this->get_parameter_or<double>("tire_diameter", p_TireDiameter, 210.0 );
 	this->get_parameter_or<double>("tred_width",    p_TredWidth,    537.0 );
 
+	this->get_parameter_or<int32_t>("cmd_reset_interval", p_CmdResetInterval, 0);
+	
 	this->get_parameter_or<std::string>("odometry.frame_id",       p_OdmFrameID, std::string("odom")           );
 	this->get_parameter_or<std::string>("odometry.child_frame_id", p_OdmChildID, std::string("base_footprint") );
 	this->get_parameter_or<bool>       ("odometry.publish_tf",     p_PublishTF,  false                         );
@@ -80,7 +83,7 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 
 		// 周期タイマ作成してコールバック関数を登録
 		m_timer = this->create_wall_timer(
-			50ms,
+			100ms,
 			std::bind(&MidoriCartDrive::CyclicTimerEvent, this)
 		);
 	}
@@ -182,6 +185,7 @@ void MidoriCartDrive::CmdvelSubscriptionEvent(const geometry_msgs::msg::Twist::S
 	// 受信したL/A指令をメンバ変数に保存するだけ
 	m_CmdLinear = msg->linear.x;
 	m_CmdAngular = msg->angular.z;
+	m_CmdIntervalCnt = 0;
 }
 
 /*=============================================================================
@@ -223,18 +227,23 @@ void MidoriCartDrive::ServoOutputSubscriptionEvent(const midori_cart_messages::m
 }
 
 /*=============================================================================
-	周期タイマコールバック関数(50ms)
+	周期タイマコールバック関数(100ms)
 =============================================================================*/
+#define	TIMER_INTERVAL_MS	(100)
 void MidoriCartDrive::CyclicTimerEvent(void)
 {
-#if 0
-	p_GearRate = 1.0;
-	p_NumTeeth1 = 24.0;
-	p_NumTeeth2 = 72.0;
-	p_TireDiameter = 205.0;
-	p_TredWidth = 500.0;
-#endif
 	// 速度指令作成
+	// cmd_velを一定の期間受信しなかったら停止させる
+	if(p_CmdResetInterval)
+	{
+		if(++m_CmdIntervalCnt >= p_CmdResetInterval / TIMER_INTERVAL_MS)
+		{
+			m_CmdIntervalCnt = p_CmdResetInterval / TIMER_INTERVAL_MS;
+			m_CmdLinear = 0.0;
+			m_CmdAngular = 0.0;
+		}
+	}
+
 	double  gear_rate = p_GearRate * p_NumTeeth1 / p_NumTeeth2;     // モータ軸から車輪軸までの減速比
 	double  vl, va;
 	
