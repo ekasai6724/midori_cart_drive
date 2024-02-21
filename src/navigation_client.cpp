@@ -131,7 +131,13 @@ void NavigationClient::NavGoalResponseCallback(std::shared_future<rclcpp_action:
 =============================================================================*/
 void NavigationClient::NavFeedbackCallback(rclcpp_action::ClientGoalHandle<NavigateToPose>::SharedPtr, const std::shared_ptr<const NavigateToPose::Feedback> feedback)
 {
-	RCLCPP_INFO(get_logger(), "Distance remaining = %f", feedback->distance_remaining);
+	static double d_r = 0.0;
+
+	if(fabs(feedback->distance_remaining - d_r) > 0.1)
+	{
+		RCLCPP_INFO(get_logger(), "Distance remaining = %f", feedback->distance_remaining);
+	}
+	d_r = feedback->distance_remaining;
 }
 
 /*=============================================================================
