@@ -63,7 +63,7 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 
 		// 左車輪サーボ制御入力返信パブリッシャ作成
 		m_inputL_pub = this->create_publisher<midori_cart_messages::msg::ServoInput>(
-			"servo_input_L",
+			"/servo_input_L",
 			rclcpp::QoS(10)
 		);
 
@@ -76,7 +76,7 @@ MidoriCartDrive::MidoriCartDrive(const std::string &name):Node(name)
 
 		// odometryデータパブリッシャ作成
 		m_odom_pub = this->create_publisher<nav_msgs::msg::Odometry>(
-			"odom",
+			"/odom",
 			rclcpp::QoS(10)
 		);
 		m_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(this);

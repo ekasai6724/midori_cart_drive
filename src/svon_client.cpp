@@ -19,7 +19,7 @@ SvonClient::SvonClient(const std::string &name):Node(name)
 	);
 	m_svon_client = this->create_client<midori_cart_messages::srv::SvonMessage>("svon_service");
 	m_output_pub = this->create_publisher<midori_cart_messages::msg::ServoOutput>(
-		"servo_output_L",
+		"/servo_output_L",
 		rclcpp::QoS(10)
 	);
 	m_input_sub = this->create_subscription<midori_cart_messages::msg::ServoInput>(

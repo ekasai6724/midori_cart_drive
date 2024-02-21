@@ -66,4 +66,7 @@ def generate_launch_description():
         Node(
             package="midori_cart_drive", executable="svon_client", name="svon_client_node"
         ),
+        Node(
+            package="midori_cart_drive", executable="navigation_client", name="navigation_client_node"
+        ),
     ])

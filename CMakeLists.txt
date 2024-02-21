@@ -21,9 +21,11 @@ endif()
 # 依存パッケージ
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -52,9 +54,11 @@ function(custom_executable target)
     ament_target_dependencies(
         ${target}
         rclcpp
+        rclcpp_action
         geometry_msgs
         sensor_msgs
         nav_msgs
+        nav2_msgs
         std_msgs
         tf2
         tf2_ros
@@ -87,5 +91,6 @@ endfunction()
 
 custom_executable(midori_cart_drive)
 custom_executable(svon_client)
+custom_executable(navigation_client)
 
 ament_package()
