@@ -27,7 +27,7 @@ private:
 	
 	void ServoInputSubscriptionEvent(const midori_cart_messages::msg::ServoInput::SharedPtr msg);
 	void PublishInitialPose(void);
-	void StartNavigation(void);
+	void StartNavigation(int pos);
 	void NavGoalResponseCallback(std::shared_future<rclcpp_action::ClientGoalHandle<NavigateToPose>::SharedPtr> future);
 	void NavFeedbackCallback(
 		rclcpp_action::ClientGoalHandle<NavigateToPose>::SharedPtr,

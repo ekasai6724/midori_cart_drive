@@ -40,11 +40,9 @@ void NavigationClient::ServoInputSubscriptionEvent(const midori_cart_messages::m
 	//ss << "Servo Input: " << std::to_string(msg->input);
 	//RCLCPP_INFO(this->get_logger(), ss.str().c_str());
 
-	// IN0立上りで初期位置指定
-	if(!(m_ServoInput & 0x0001) && (msg->input & 0x0001))	PublishInitialPose();
-
-	// IN1立上りで初期位置に戻る
-	if(!(m_ServoInput & 0x0002) && (msg->input & 0x0002))	StartNavigation();
+	if		(!(m_ServoInput & 0x0001) && (msg->input & 0x0001))		PublishInitialPose();	// IN0立上りで初期位置指定
+	else if (!(m_ServoInput & 0x0002) && (msg->input & 0x0002))		StartNavigation(1);		// IN1立上りで固定目標位置へ移動
+	else if (!(m_ServoInput & 0x0004) && (msg->input & 0x0004))		StartNavigation(0);		// IN2立上りで初期位置に戻る
 
 	m_ServoInput = msg->input;
 }
@@ -77,7 +75,7 @@ void NavigationClient::PublishInitialPose(void)
 /*=============================================================================
 	目標位置移動(アクション)起動
 =============================================================================*/
-void NavigationClient::StartNavigation(void)
+void NavigationClient::StartNavigation(int pos)
 {
 	// アクションサーバの起動確認
 	while(!m_navigation_client->wait_for_action_server(500ms))
@@ -97,16 +95,25 @@ void NavigationClient::StartNavigation(void)
 	goal_msg.pose.header.stamp = ros_clock.now();
 	goal_msg.pose.header.frame_id = "map";
 
-	goal_msg.pose.pose.position.x = 0.0;
-	goal_msg.pose.pose.position.y = 0.0;
 	tf2::Quaternion q;
-	q.setRPY(0.0, 0.0, 0.0);
+	if(pos == 1)
+	{
+		goal_msg.pose.pose.position.x = 3.3;
+		goal_msg.pose.pose.position.y = 6.8;
+		q.setRPY(0.0, 0.0, 0.0);
+	}
+	else
+	{
+		goal_msg.pose.pose.position.x = 0.0;
+		goal_msg.pose.pose.position.y = 0.0;
+		q.setRPY(0.0, 0.0, 0.0);
+	}
 	goal_msg.pose.pose.orientation.x = q.x();
 	goal_msg.pose.pose.orientation.y = q.y();
 	goal_msg.pose.pose.orientation.z = q.z();
 	goal_msg.pose.pose.orientation.w = q.w();
 
-	// コールバック登録登録構造体
+	// コールバック登録
 	auto send_goal_options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
 	send_goal_options.goal_response_callback = std::bind(&NavigationClient::NavGoalResponseCallback, this, _1);
 	send_goal_options.feedback_callback = std::bind(&NavigationClient::NavFeedbackCallback, this, _1, _2);
