@@ -29,6 +29,10 @@ NavigationClient::NavigationClient(const std::string &name):Node(name)
 
 	// ナビゲーション(目標位置移動)アクションクライアント作成
 	m_navigation_client = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(this, "navigate_to_pose");
+
+	RCLCPP_INFO(get_logger(), "Navigation client node constructed");
+	rclcpp::sleep_for(10s);
+	PublishInitialPose();
 }
 
 /*=============================================================================
@@ -70,6 +74,7 @@ void NavigationClient::PublishInitialPose(void)
 		0.06853891945200942
 	};
     m_initialpose_pub->publish(initial_pose);
+	RCLCPP_INFO(get_logger(), "Initial pose published");
 }
 
 /*=============================================================================

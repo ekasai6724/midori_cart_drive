@@ -361,6 +361,8 @@ void MidoriCartDrive::OdometryMain(const rclcpp::Time &now)
 
 	CalculateOdometry(duration);
 	PublishOdometry(now);
+
+	last_time = now;
 }
 
 /*=============================================================================
@@ -406,7 +408,7 @@ bool MidoriCartDrive::CalculateOdometry(const rclcpp::Duration &duration)
 		   << "RobotPose[2]: " << std::to_string(m_RobotPose[2]);
 		//RCLCPP_INFO(this->get_logger(), ss.str().c_str());
 	}
-	//RCLCPP_DEBUG(nh_->get_logger(), "x : %f, y : %f", m_RobotPose[0], m_RobotPose[1]);
+	//RCLCPP_INFO(this->get_logger(), "duration : %f", step_time);
 
 	// compute odometric instantaneouse velocity
 	v = delta_s / step_time;
